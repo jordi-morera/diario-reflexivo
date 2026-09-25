@@ -1,46 +1,39 @@
-import os, json
+import os, json, uuid
+from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import anthropic
-import sqlite3
-from pathlib import Path
+import boto3
+from botocore.exceptions import ClientError
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-DB_PATH = Path(__file__).parent / "diary.db"
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+frontend_origin = os.getenv("FRONTEND_ORIGIN", "*")
+CORS(app, resources={r"/api/*": {"origins": frontend_origin}})
 
+ENTRIES_TABLE = os.getenv("ENTRIES_TABLE", "DiaryEntries")
+REFLECTIONS_TABLE = os.getenv("REFLECTIONS_TABLE", "Reflections")
+ANTHROPIC_SECRET_NAME = os.getenv("ANTHROPIC_SECRET_NAME")
+
+dynamodb = boto3.resource("dynamodb")
+entries_table = dynamodb.Table(ENTRIES_TABLE)
+reflections_table = dynamodb.Table(REFLECTIONS_TABLE)
+secrets_client = boto3.client("secretsmanager")
+
+def get_anthropic_key():
+    if ANTHROPIC_SECRET_NAME:
+        try:
+            response = secrets_client.get_secret_value(SecretId=ANTHROPIC_SECRET_NAME)
+            return response.get("SecretString") or json.loads(response.get("SecretBinary", "{}")).get("ANTHROPIC_API_KEY")
+        except ClientError:
+            pass
+    return os.getenv("ANTHROPIC_API_KEY")
+
+ANTHROPIC_API_KEY = get_anthropic_key()
 if not ANTHROPIC_API_KEY:
     raise RuntimeError("ANTHROPIC_API_KEY no está configurada")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""CREATE TABLE IF NOT EXISTS entries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        content TEXT NOT NULL,
-        mood TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
-    cursor.execute("""CREATE TABLE IF NOT EXISTS reflections (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        entry_id INTEGER NOT NULL UNIQUE,
-        reflection_text TEXT NOT NULL,
-        questions TEXT,
-        patterns TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (entry_id) REFERENCES entries(id)
-    )""")
-    conn.commit()
-    conn.close()
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 SYSTEM_PROMPT = """Eres un psicólogo humanista especializado en ayudar a las personas a procesar sus emociones.
 Tu rol es actuar como espejo reflexivo: ayuda a la persona a entender lo que siente, a identificar patrones,
@@ -54,66 +47,56 @@ def create_entry():
     data = request.get_json()
     if not data or not data.get("content"):
         return jsonify({"error": "contenido obligatorio"}), 400
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO entries (content, mood) VALUES (?, ?)", (data.get("content"), data.get("mood")))
-    conn.commit()
-    entry_id = cursor.lastrowid
-    conn.close()
+    entry_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+    entries_table.put_item(Item={
+        "id": entry_id,
+        "content": data.get("content"),
+        "mood": data.get("mood", ""),
+        "created_at": now
+    })
     return jsonify({"id": entry_id, "content": data.get("content"), "mood": data.get("mood")}), 201
 
 @app.route("/api/entries", methods=["GET"])
 def list_entries():
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, content, mood, created_at FROM entries ORDER BY created_at DESC LIMIT 50")
-    entries = [{"id": r["id"], "content": r["content"][:200], "mood": r["mood"], "created_at": r["created_at"]} for r in cursor.fetchall()]
-    conn.close()
+    response = entries_table.scan(Limit=50)
+    items = response.get("Items", [])
+    items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    entries = [{"id": item["id"], "content": item.get("content", "")[:200], "mood": item.get("mood", ""), "created_at": item.get("created_at", "")} for item in items]
     return jsonify(entries), 200
 
-@app.route("/api/entries/<int:entry_id>", methods=["GET"])
+@app.route("/api/entries/<entry_id>", methods=["GET"])
 def get_entry(entry_id):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, content, mood, created_at FROM entries WHERE id = ?", (entry_id,))
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
+    response = entries_table.get_item(Key={"id": entry_id})
+    item = response.get("Item")
+    if not item:
         return jsonify({"error": "no encontrada"}), 404
-    return jsonify({"id": row["id"], "content": row["content"], "mood": row["mood"]}), 200
+    return jsonify({"id": item["id"], "content": item.get("content"), "mood": item.get("mood")}), 200
 
-@app.route("/api/entries/<int:entry_id>", methods=["DELETE"])
+@app.route("/api/entries/<entry_id>", methods=["DELETE"])
 def delete_entry(entry_id):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM entries WHERE id = ?", (entry_id,))
-    if not cursor.fetchone():
-        conn.close()
+    response = entries_table.get_item(Key={"id": entry_id})
+    if not response.get("Item"):
         return jsonify({"error": "no encontrada"}), 404
-    cursor.execute("DELETE FROM reflections WHERE entry_id = ?", (entry_id,))
-    cursor.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
-    conn.commit()
-    conn.close()
+    reflections_table.delete_item(Key={"entry_id": entry_id})
+    entries_table.delete_item(Key={"id": entry_id})
     return "", 204
 
-@app.route("/api/entries/<int:entry_id>/reflect", methods=["POST"])
+@app.route("/api/entries/<entry_id>/reflect", methods=["POST"])
 def generate_reflection(entry_id):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT content FROM entries WHERE id = ?", (entry_id,))
-    row = cursor.fetchone()
-    if not row:
-        conn.close()
+    response = entries_table.get_item(Key={"id": entry_id})
+    item = response.get("Item")
+    if not item:
         return jsonify({"error": "no encontrada"}), 404
-    
+
     try:
         message = client.messages.create(
             model="claude-sonnet-5",
             max_tokens=1000,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": f"Mi entrada de diario: {row['content']}\n\nAyúdame a procesar estas emociones."}]
+            messages=[{"role": "user", "content": f"Mi entrada de diario: {item.get('content')}\n\nAyúdame a procesar estas emociones."}]
         )
-        
+
         response_text = None
         for block in message.content:
             if hasattr(block, 'text'):
@@ -128,30 +111,30 @@ def generate_reflection(entry_id):
             response_text = response_text.split("```")[1].split("```")[0].strip()
 
         reflection_data = json.loads(response_text)
-        
+
     except Exception as e:
         print(f"❌ Error en reflexión: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-        conn.close()
         return jsonify({"error": str(e)}), 500
-    
-    cursor.execute("INSERT OR REPLACE INTO reflections (entry_id, reflection_text, questions, patterns) VALUES (?, ?, ?, ?)",
-        (entry_id, reflection_data.get("reflection", ""), json.dumps(reflection_data.get("questions", [])), json.dumps(reflection_data.get("patterns", []))))
-    conn.commit()
-    conn.close()
+
+    now = datetime.utcnow().isoformat()
+    reflections_table.put_item(Item={
+        "entry_id": entry_id,
+        "reflection_text": reflection_data.get("reflection", ""),
+        "questions": reflection_data.get("questions", []),
+        "patterns": reflection_data.get("patterns", []),
+        "created_at": now
+    })
     return jsonify({"entry_id": entry_id, "reflection": reflection_data.get("reflection"), "questions": reflection_data.get("questions", []), "patterns": reflection_data.get("patterns", [])}), 201
 
-@app.route("/api/entries/<int:entry_id>/reflection", methods=["GET"])
+@app.route("/api/entries/<entry_id>/reflection", methods=["GET"])
 def get_reflection(entry_id):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT reflection_text, questions, patterns FROM reflections WHERE entry_id = ?", (entry_id,))
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
+    response = reflections_table.get_item(Key={"entry_id": entry_id})
+    item = response.get("Item")
+    if not item:
         return jsonify({"error": "sin reflexión"}), 404
-    return jsonify({"entry_id": entry_id, "reflection": row["reflection_text"], "questions": json.loads(row["questions"]), "patterns": json.loads(row["patterns"])}), 200
+    return jsonify({"entry_id": entry_id, "reflection": item.get("reflection_text"), "questions": item.get("questions", []), "patterns": item.get("patterns", [])}), 200
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -159,7 +142,6 @@ def health():
 
 if __name__ == "__main__":
     print("📔 Inicializando Diario Reflexivo...")
-    init_db()
-    print("✅ BD lista")
+    print("✅ DynamoDB configurado")
     print("🚀 Servidor en http://localhost:5001")
     app.run(debug=True, port=5001)

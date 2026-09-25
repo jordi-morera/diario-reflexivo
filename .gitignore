@@ -1,7 +1,12 @@
 .env
+.env.local
 venv/
 node_modules/
 *.db
 __pycache__/
 .DS_Store
 dist/
+frontend/dist/
+/tmp/
+lambda-policy.json
+cloudfront-config.json

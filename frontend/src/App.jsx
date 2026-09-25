@@ -4,7 +4,7 @@ import DiaryList from './components/DiaryList'
 import DiaryEntry from './components/DiaryEntry'
 import Reflection from './components/Reflection'
 
-const API_BASE = 'http://localhost:5001/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5001/api'
 
 export default function App() {
   const [view, setView] = useState('list')
