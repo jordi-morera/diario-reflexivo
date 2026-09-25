@@ -1,273 +1,339 @@
-# 📔 Diario Reflexivo
+# 📔 Diario Reflexivo (Reflective Journal)
 
-*[Read in English](README.en.md)*
+*[Leer en español](README.es.md)*
 
-> **Un diario asistido donde la IA actúa como espejo reflexivo para procesar tus emociones.**
+> **An AI-assisted journal where Claude acts as a reflective mirror to help you process emotions.**
 
-Construye una comprensión más profunda de tus patrones emocionales a través de conversaciones reflexivas impulsadas por Claude.
+Builds a deeper understanding of your emotional patterns through reflective conversations powered by Claude.
 
-## 🎯 ¿Qué hace?
+## 🎯 What it does
 
-1. **Escribes tu entrada** — expresas lo que sientes sin filtros
-2. **Claude reflexiona** — te devuelve preguntas poderosas, valida emociones, identifica patrones
-3. **Archivas tu proceso** — accede a tu historial, revisa entradas pasadas y elimina las que ya no quieras conservar
+1. **You write an entry** — express what you're feeling, unfiltered
+2. **Claude reflects back** — returns powerful questions, validates emotions, identifies patterns
+3. **You archive your process** — browse your history, revisit past entries, and delete the ones you no longer want to keep
 
-### Ejemplo real
+### Real example
 
-**Tu entrada:**
+**Your entry:**
 ```
-Hoy tuve una reunión importante y todo salió mal. Cometí un error tonto 
-y ahora creo que mi jefe piensa que no valgo para este trabajo. 
-Me siento como un fracaso.
-```
-
-**Claude te devuelve:**
-```
-Reflexión: Veo que tras un error puntual has hecho una conclusión 
-muy amplia sobre tu valía profesional. Eso es un patrón de pensamiento 
-donde un evento negativo define toda tu competencia. Eres mucho más que 
-un error.
-
-Preguntas:
-1. ¿Qué hechos concretos tienes de que tu jefe piense que no vales?
-2. ¿Ha ocurrido antes algún error que te hayas recuperado de él?
-3. ¿Cómo hablarías a un amigo que pasara por lo mismo?
-
-Patrones:
-- Catastrofismo: generalizar un error puntual a fracaso total
-- Lectura de mente: asumir qué piensa tu jefe sin datos
+Today I had an important meeting and everything went wrong. I made a
+silly mistake and now I think my boss thinks I'm not good enough for
+this job. I feel like a failure.
 ```
 
-## 🏗️ Arquitectura
+**Claude returns:**
+```
+Reflection: I notice that after a single mistake you've drawn a very
+broad conclusion about your professional worth. That's a thinking
+pattern where one negative event defines your entire competence.
+You are much more than one mistake.
 
+Questions:
+1. What concrete evidence do you have that your boss thinks you're not
+   good enough?
+2. Has there been a mistake before that you recovered from?
+3. How would you talk to a friend going through the same thing?
+
+Patterns:
+- Catastrophizing: generalizing a single mistake into total failure
+- Mind reading: assuming what your boss thinks without evidence
+```
+
+## 🏗️ Architecture
+
+### Local development (SQLite)
+In development, the architecture is straightforward:
+```
+React (Frontend)
+    ↓ (HTTP)
+Flask API (Backend)
+    ↓ (SQL)
+SQLite (local persistence)
+    ↓
+Claude API
+```
+
+### Production on AWS (DynamoDB)
+In production, it deploys to AWS serverless:
+```
+                    ┌─ CloudFront (CDN) ─┐
+                    │   (HTTPS, cache)   │
+                    └────────────────────┘
+                      ↓               ↓
+                   S3              API Gateway
+                (Frontend)          (Lambda)
+                                        ↓
+                                    Flask App
+                                        ↓
+                                    DynamoDB
+                                        ↓
+                                    Claude API
+```
+
+**File structure:**
 ```
 📁 diario_reflexivo/
 ├── backend/
-│   └── app.py              ← API Flask: CRUD de entradas + reflexión con Claude
+│   ├── app.py              ← Flask API: CRUD for entries + reflection via Claude
+│   ├── lambda_function.py  ← AWS Lambda handler (no rewrites needed)
+│   └── requirements.txt    ← Python dependencies (boto3, aws-wsgi, etc.)
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx         ← Componente raíz: estado, routing simple, llamadas a la API
-│   │   ├── App.css         ← Sistema de diseño (variables CSS, dark mode, animaciones)
-│   │   ├── main.jsx        ← Punto de entrada de React
+│   │   ├── App.jsx         ← Root component: state, simple view routing, API calls
+│   │   ├── App.css         ← Design system (CSS variables, dark mode, animations)
+│   │   ├── main.jsx        ← React entry point
 │   │   └── components/
-│   │       ├── DiaryList.jsx     ← Listar y eliminar entradas
-│   │       ├── DiaryEntry.jsx    ← Formulario para crear una entrada
-│   │       └── Reflection.jsx    ← Mostrar la reflexión generada por Claude
+│   │       ├── DiaryList.jsx     ← List and delete entries
+│   │       ├── DiaryEntry.jsx    ← Form to create an entry
+│   │       └── Reflection.jsx    ← Display the reflection Claude generated
 │   ├── index.html
 │   ├── vite.config.js
 │   └── package.json
-├── requirements.txt        ← Dependencias Python
-└── README.md               ← Este fichero
+├── DEPLOYMENT.md           ← Complete guide to deploy on AWS
+├── requirements.txt        ← Python dependencies
+└── README.md / README.es.md
 ```
 
-**Flujo de datos:**
+**Persistence:**
+- **Local development**: SQLite in `backend/diary.db`
+- **Production AWS**: DynamoDB with two tables (`DiaryEntries` and `Reflections`)
 
-```
-React (Frontend)
-    ↓ (HTTP requests: fetch)
-Flask API (Backend)
-    ↓ (lee/escribe)
-SQLite (persistencia local)
-    ↓ (para reflexionar)
-Claude API (razonamiento)
-```
+**IDs:**
+- **Local development**: autoincrement (1, 2, 3...)
+- **Production AWS**: UUIDs (strings) for better scalability
 
-No hay capas de más: el frontend habla HTTP con Flask, Flask habla SQL con SQLite y habla API con Claude cuando toca generar una reflexión. Fácil de razonar, fácil de explicar en una entrevista.
+## ⚡ Quick setup (local development)
 
-## ⚡ Setup rápido
-
-### Requisitos previos
+### Prerequisites
 - Python 3.9+
 - Node.js 16+
-- API Key de Anthropic ([obtén una aquí](https://console.anthropic.com))
+- Anthropic API key ([get one here](https://console.anthropic.com))
 
-### Backend (Flask)
+### Backend (Flask + SQLite)
 
 ```bash
 cd backend
 
-# 1. Crear venv
+# 1. Create a venv
 python -m venv venv
-source venv/bin/activate  # en Windows: venv\Scripts\activate
+source venv/bin/activate  # on Windows: venv\Scripts\activate
 
-# 2. Instalar dependencias
+# 2. Install dependencies
 pip install -r ../requirements.txt
 
-# 3. Configurar API key
+# 3. Configure the API key
 export ANTHROPIC_API_KEY="sk-ant-..."
 
-# 4. Ejecutar servidor
+# 4. Run the server
 python app.py
 ```
 
-El servidor estará en `http://localhost:5001`
+The server will run at `http://localhost:5001` and use local SQLite (`backend/diary.db`).
 
 ### Frontend (React + Vite)
 
 ```bash
 cd frontend
 
-# 1. Instalar dependencias
+# 1. Install dependencies
 npm install
 
-# 2. Ejecutar dev server
+# 2. Run the dev server
 npm run dev
 ```
 
-Frontend estará en `http://localhost:5173` (Vite usa el siguiente puerto libre si ese está ocupado).
+Frontend will run at `http://localhost:5173` (Vite falls back to the next free port if that one is taken).
 
-**Accede a la app:** abre el navegador en la URL que imprima Vite.
+**Open the app:** visit the URL Vite prints in your terminal.
 
-> También hay un `setup.sh` que automatiza ambos pasos de instalación (`./setup.sh`).
+> There's also a `setup.sh` script that automates both installs (`./setup.sh`).
 
-## 📚 Cómo usar
+## 🚀 Deploy to AWS
 
-1. **Nueva Entrada**: haz click en "✍️ Nueva Entrada", selecciona cómo te sientes y escribe
-2. **Guardar**: clickea "💾 Guardar"
-3. **Reflexionar**: accede a la entrada guardada y clickea "🔮 Obtener Reflexión"
-4. **Reflexión**: Claude te devuelve una reflexión empática, preguntas y patrones identificados
-5. **Archivo**: vuelve a "📚 Mis Entradas" para revisar tu historial
-6. **Eliminar**: en el listado o dentro de una entrada, pulsa el icono 🗑️ para borrarla (pide confirmación porque es irreversible)
+To deploy the entire application on AWS with S3 (frontend), Lambda (backend), and DynamoDB (persistence):
 
-## 🔧 Endpoints API
+**Read the complete guide in [`DEPLOYMENT.md`](DEPLOYMENT.md)** which includes step-by-step instructions for:
+- Creating DynamoDB tables
+- Setting up AWS Secrets Manager for the API key
+- Packaging and deploying the backend on Lambda
+- Creating API Gateway to expose the backend
+- Configuring S3 + CloudFront for the frontend
+- Building and uploading the frontend
 
-| Método | Endpoint | Descripción |
+**Quick summary:**
+```bash
+# Backend
+aws dynamodb create-table --table-name DiaryEntries --attribute-definitions AttributeName=id,AttributeType=S --key-schema AttributeName=id,KeyType=HASH --billing-mode PAY_PER_REQUEST
+
+# Frontend
+VITE_API_BASE=https://your-api.execute-api.region.amazonaws.com/api npm run build
+aws s3 sync frontend/dist/ s3://your-bucket/
+```
+
+**Approximate costs:** ~$0.60-2/month (Lambda: free tier, DynamoDB: $0-1.25, CloudFront: $0-0.50, Secrets Manager: $0.40).
+
+## 📚 How to use it
+
+1. **New entry**: click "✍️ Nueva Entrada", pick how you're feeling, and write
+2. **Save**: click "💾 Guardar"
+3. **Reflect**: open the saved entry and click "🔮 Obtener Reflexión"
+4. **Reflection**: Claude returns an empathetic reflection, questions, and identified patterns
+5. **Archive**: go back to "📚 Mis Entradas" to browse your history
+6. **Delete**: from the list or from an open entry, tap the 🗑️ icon to delete it (asks for confirmation, since it's irreversible)
+
+## 🔧 API endpoints
+
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/entries` | Crear nueva entrada |
-| GET | `/api/entries` | Listar todas las entradas (últimas 50, contenido truncado) |
-| GET | `/api/entries/<id>` | Obtener entrada específica (contenido completo) |
-| DELETE | `/api/entries/<id>` | Eliminar una entrada y su reflexión asociada |
-| POST | `/api/entries/<id>/reflect` | Generar reflexión con Claude (crea o reemplaza la existente) |
-| GET | `/api/entries/<id>/reflection` | Obtener reflexión guardada |
+| POST | `/api/entries` | Create a new entry |
+| GET | `/api/entries` | List all entries (latest 50, content truncated) |
+| GET | `/api/entries/<id>` | Get a specific entry (full content) |
+| DELETE | `/api/entries/<id>` | Delete an entry and its associated reflection |
+| POST | `/api/entries/<id>/reflect` | Generate a reflection with Claude (creates or replaces the existing one) |
+| GET | `/api/entries/<id>/reflection` | Get a saved reflection |
 | GET | `/health` | Health check |
 
-**Ejemplo: crear entrada**
+**Example: create an entry**
 
 ```bash
 curl -X POST http://localhost:5001/api/entries \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "Hoy me sentí abrumado con todo",
+    "content": "Today I felt overwhelmed by everything",
     "mood": "😰 Ansioso"
   }'
 ```
 
-**Ejemplo: eliminar entrada**
+**Example: delete an entry**
 
 ```bash
 curl -X DELETE http://localhost:5001/api/entries/3
-# 204 No Content si se elimina, 404 si no existe
+# 204 No Content on success, 404 if it doesn't exist
 ```
 
-## 🧠 Cómo funciona la reflexión
+## 🧠 How the reflection works
 
-### Proceso
+### Process
 
-1. **Frontend envía entrada** → `POST /api/entries/<id>/reflect`
-2. **Backend obtiene la entrada** de la BD
-3. **Llama a Claude** con:
-   - System prompt (instrucciones de rol: psicólogo humanista)
-   - User message: la entrada del usuario
-4. **Claude analiza y devuelve JSON** con:
-   - `reflection`: tu reflexión empática
-   - `questions`: preguntas poderosas
-   - `patterns`: patrones identificados
-5. **Backend guarda en BD** (upsert vía `INSERT OR REPLACE`, así puedes volver a reflexionar sobre la misma entrada) y devuelve al frontend
-6. **Frontend muestra** la reflexión de forma visual
+1. **Frontend sends the entry** → `POST /api/entries/<id>/reflect`
+2. **Backend fetches the entry** from the database
+3. **Calls Claude** with:
+   - A system prompt (role instructions: humanistic psychologist)
+   - A user message: the journal entry itself
+4. **Claude analyzes it and returns JSON** with:
+   - `reflection`: an empathetic reflection
+   - `questions`: powerful, open questions
+   - `patterns`: identified thinking patterns
+5. **Backend saves it** (upsert via `INSERT OR REPLACE`, so you can re-generate a reflection for the same entry) and returns it to the frontend
+6. **Frontend renders** the reflection visually
 
-### System Prompt
+### System prompt
 
-El prompt está diseñado para que Claude actúe como psicólogo humanista:
-- Empatía auténtica
-- Preguntas reflexivas (no consejos)
-- Identificación de patrones cognitivos
-- Validación emocional
+The prompt is designed to make Claude act as a humanistic psychologist:
+- Genuine empathy
+- Reflective questions (not advice)
+- Identification of cognitive patterns
+- Emotional validation
 
-**Puedes modificar** `SYSTEM_PROMPT` en `backend/app.py` para cambiar el tono o enfoque.
+**You can tune this** by editing `SYSTEM_PROMPT` in `backend/app.py` to change tone or focus.
 
-## 🎨 Sistema de diseño del frontend
+## 🎨 Frontend design system
 
-La interfaz pasó por una pasada de modernización visual completa, pensada para que el diario se sienta cálido y cuidado en vez de una demo genérica:
+The interface went through a full visual modernization pass, aimed at making the journal feel warm and considered rather than a generic demo:
 
-- **Paleta e identidad**: gama índigo/rosa (`--primary`, `--accent`) definida como variables CSS en `:root`, con una versión completa para **modo oscuro** vía `prefers-color-scheme` — se adapta automáticamente al tema del sistema del usuario sin JavaScript adicional.
-- **Tipografía dual**: [Inter](https://fonts.google.com/specimen/Inter) para UI e interacción, y [Fraunces](https://fonts.google.com/specimen/Fraunces) (serif editorial) para titulares y el texto de la reflexión — refuerza que la reflexión es un momento distinto, más pausado, dentro del flujo.
-- **Cabecera con gradiente radial** y un borde inferior curvo (en vez de un corte recto), con la navegación en pastillas flotando sobre ella.
-- **Micro-interacciones**: elevación sutil al pasar el ratón sobre tarjetas y botones, focus ring accesible en el textarea, spinner de carga, animaciones de entrada (`fadeIn`) al cambiar de vista.
-- **Componentes reutilizables por convención de clases**: botones primario/secundario, tarjetas, badges de estado de ánimo, listas de preguntas/patrones — todo definido una vez como utilidades en `App.css` y reutilizado entre vistas.
-- **Responsive real**: grid de entradas con `auto-fill`/`minmax` que se adapta a cualquier ancho, navegación que pasa a columna en móvil.
-- **Sin librería de UI externa**: todo es CSS plano con variables — deliberado, para mantener el bundle ligero y que el sistema de diseño sea fácil de explicar y modificar sin depender de Tailwind/MUI/etc.
+- **Palette and identity**: an indigo/pink range (`--primary`, `--accent`) defined as CSS variables on `:root`, with a full **dark mode** counterpart via `prefers-color-scheme` — it adapts automatically to the user's system theme with no extra JavaScript.
+- **Dual typography**: [Inter](https://fonts.google.com/specimen/Inter) for UI and interaction, and [Fraunces](https://fonts.google.com/specimen/Fraunces) (an editorial serif) for headings and the reflection text — reinforces that the reflection is a distinct, slower moment within the flow.
+- **Header with a radial gradient** and a curved bottom edge (instead of a hard cut), with pill-shaped navigation floating over it.
+- **Micro-interactions**: subtle lift on hover for cards and buttons, an accessible focus ring on the textarea, a loading spinner, fade-in animations on view transitions.
+- **Reusable components by class convention**: primary/secondary buttons, cards, mood badges, question/pattern lists — all defined once as utilities in `App.css` and reused across views.
+- **Genuinely responsive**: an entries grid using `auto-fill`/`minmax` that adapts to any width, navigation that stacks into a column on mobile.
+- **No external UI library**: everything is plain CSS with variables — a deliberate choice, to keep the bundle light and the design system easy to explain and modify without depending on Tailwind/MUI/etc.
 
-### Frontend (decisiones generales)
-- **React mínimo**: 4 componentes, estado con hooks (`useState`/`useEffect`), sin gestor de estado externo — la app es lo bastante pequeña como para no necesitarlo.
-- **Vite**: build tool moderno y rápido, HMR instantáneo en desarrollo.
-- **Fetch nativo**: sin cliente HTTP adicional; `API_BASE` centraliza la URL del backend.
+### Frontend (general decisions)
+- **Minimal React**: 4 components, state via hooks (`useState`/`useEffect`), no external state manager — the app is small enough that it doesn't need one.
+- **Vite**: a modern, fast build tool with instant HMR in development.
+- **Native `fetch`**: no extra HTTP client; `API_BASE` centralizes the backend URL.
 
 ### Backend
-- **Flask**: transparente, pocas abstracciones, perfecto para razonar sobre cada request.
-- **SQLite**: base de datos simple basada en fichero, no requiere servidor externo ni migraciones complejas.
-- **CRUD completo sobre `entries`**: crear, listar, leer, **eliminar** (con borrado en cascada manual de la reflexión asociada) y reflexionar.
-- **Claude API directa** vía el SDK oficial de `anthropic`, sin frameworks agénticos — el caso de uso es una sola llamada con un prompt bien diseñado, así que añadir una capa de orquestación sería sobre-ingeniería.
-- **CORS habilitado**: permite llamadas desde el frontend en desarrollo.
+- **Flask**: transparent, few abstractions, easy to reason about per request.
+- **Flexible persistence**:
+  - **Local development**: SQLite (file `backend/diary.db`)
+  - **Production AWS**: DynamoDB (with `boto3`) for scalability and serverless
+- **Full CRUD over `entries`**: create, list, read, **delete** (with a manual cascading delete of the associated reflection), and reflect.
+- **Direct Claude API calls** via the official `anthropic` SDK, no agentic framework — the use case is a single call with a well-designed prompt, so adding an orchestration layer would be over-engineering.
+- **Configurable CORS**: accepts `*` in development, restricted to CloudFront URL in production.
+- **AWS Lambda compatible**: uses `aws-wsgi` to wrap the Flask app without rewrites — the same code runs locally and on Lambda.
 
-### IA
-- **JSON estructurado**: el system prompt obliga a Claude a devolver un JSON con forma fija, parseable de forma predecible (con fallback para extraer el bloque si viene envuelto en ```` ```json ````).
-- **Prompt centrado en un solo rol**: "psicólogo humanista, espejo reflexivo" — instrucciones claras y acotadas dan resultados consistentes.
-- **Sin memoria entre entradas**: cada reflexión es independiente y se genera solo a partir del contenido de esa entrada (mejora el foco y evita que el modelo arrastre contexto irrelevante).
+### AI
+- **Structured JSON**: the system prompt forces Claude to return JSON with a fixed shape, parseable predictably (with a fallback to extract the block if it comes wrapped in ```` ```json ````).
+- **Single-role prompt**: "humanistic psychologist, reflective mirror" — clear, tightly scoped instructions produce consistent results.
+- **No memory across entries**: each reflection is generated independently from just that entry's content (improves focus and avoids the model dragging in irrelevant context).
 
-## 📊 Casos de uso
+## 📊 Use cases
 
-- **Procesamiento emocional**: trabajar ansiedad, estrés, emociones difíciles
-- **Auto-conocimiento**: identificar patrones de pensamiento recurrentes
-- **Apoyo entre sesiones de terapia**: reflexión asistida entre sesiones
-- **Journaling estructurado**: combina libre expresión con análisis
+- **Emotional processing**: working through anxiety, stress, difficult emotions
+- **Self-awareness**: identifying recurring thought patterns
+- **Support between therapy sessions**: assisted reflection between appointments
+- **Structured journaling**: combines free expression with analysis
 
-## 🚀 Próximas iteraciones
+## 🚀 Next iterations
 
-- [ ] **Multi-turn conversations**: continuar reflexionando sobre la misma entrada
-- [ ] **Dashboard de patrones**: visualizar patrones emocionales a lo largo del tiempo
-- [ ] **Recomendaciones personalizadas**: basadas en tu historial emocional
-- [ ] **Edición de entradas**: no solo crear/eliminar, también editar el contenido
-- [ ] **Export**: descargar tus entradas como PDF
-- [ ] **Autenticación**: soporte para múltiples usuarios
+- [ ] **Multi-turn conversations**: keep reflecting on the same entry
+- [ ] **Pattern dashboard**: visualize emotional patterns over time
+- [ ] **Personalized recommendations**: based on your emotional history
+- [ ] **Editing entries**: not just create/delete, also edit content
+- [ ] **Export**: download your entries as PDF
+- [ ] **Authentication**: support for multiple users
 
-## 🔐 Privacidad
+## 🔐 Privacy
 
-- Las entradas se guardan **localmente en tu SQLite** (no se suben a ningún servidor propio)
-- Solo se envía el contenido a la API de Claude en el momento de pedir una reflexión
-- Tu API key de Anthropic se configura localmente en tu máquina (variable de entorno, nunca hardcodeada)
-- Eliminar una entrada borra también su reflexión asociada — no queda rastro en la base de datos
+### Local development
+- Entries are stored **locally in your own SQLite file** (nothing is uploaded to any server)
+- Only the entry content is sent to the Claude API, and only when you ask for a reflection
+- Your Anthropic API key is configured locally (environment variable, never hardcoded)
 
-## 💡 Para explicar en una entrevista
+### Production on AWS
+- Entries are stored in **DynamoDB (your private AWS account)**, not on third-party servers
+- Only the content is sent to Claude API when you generate a reflection
+- The Anthropic API key is stored in **AWS Secrets Manager** (never visible in logs or code)
+- The frontend is served from **private S3 + CloudFront**, with no direct public access
+- CORS is restricted to your CloudFront domain (not `*`)
 
-**Versión corta (2 min):**
-> "Diario Reflexivo es una aplicación full-stack donde escribes tus emociones 
-> y Claude actúa como espejo reflexivo, devolviendo preguntas y patrones. 
-> Flask expone una API REST con CRUD completo sobre las entradas, React 
-> proporciona una UI cuidada con soporte de modo oscuro, y SQLite persiste 
-> todo localmente. El valor está en usar IA no para resolver problemas, 
-> sino para ayudarte a comprenderlos mejor."
+### General
+- Deleting an entry also deletes its associated reflection — nothing is left behind in the database
+- No tracking or data collection beyond what's necessary for the app to function
 
-**Versión detallada (5 min):**
-1. **El problema**: cuando estamos en una emoción difícil, necesitamos ayuda para procesarla sin estar solos.
-2. **La solución**: combinar journaling (procesar escribiendo) + IA reflexiva (preguntas socráticas, no consejos).
-3. **La arquitectura**:
-   - Backend Flask como API REST que orquesta la lógica (CRUD de entradas + generación de reflexiones)
-   - Frontend React con estado local simple (sin Redux/Context, porque la app no lo necesita) y un sistema de diseño propio en CSS puro
-   - SQLite para persistencia local, sin dependencias de infraestructura
-   - Claude API para la "inteligencia emocional", con prompt engineering para forzar una salida JSON estructurada
-4. **El reto técnico**: diseñar el system prompt para que Claude haga preguntas reflexivas (socráticas) en lugar de dar consejos, y parsear de forma robusta una respuesta de lenguaje natural como JSON fiable.
-5. **Iteración de producto**: partiendo de un MVP funcional, se añadieron dos mejoras guiadas por uso real: (a) una modernización visual completa (tipografía, dark mode, micro-interacciones, sistema de diseño en variables CSS) para que la app se sintiera lista para mostrar, y (b) la capacidad de eliminar entradas — un CRUD incompleto (sin delete) es un problema real de UX en cualquier app de datos personales.
-6. **El valor**: es un proyecto pequeño pero que demuestra:
-   - Diseño de API REST y principios CRUD completos
-   - Desarrollo full-stack (backend + frontend) de punta a punta
-   - Prompt engineering para un caso de uso concreto, con salida estructurada y manejo de errores
-   - Criterio de UX/diseño: sistema de diseño coherente, accesible y responsive
-   - Buen juicio de alcance: saber cuándo NO añadir una librería o abstracción (sin Tailwind, sin frameworks agénticos, sin gestor de estado) porque el problema no lo pide
+## 💡 How to explain this in an interview
 
-## 📝 Licencia
+**Short version (2 min):**
+> "Diario Reflexivo is a full-stack app where you write about your emotions
+> and Claude acts as a reflective mirror, returning questions and patterns.
+> Flask exposes a REST API with full CRUD over entries, React provides a
+> polished UI with dark mode support, and SQLite persists everything
+> locally. The value is using AI not to solve problems for you, but to
+> help you understand them better."
 
-MIT — úsalo y modifícalo como quieras.
+**Detailed version (5 min):**
+1. **The problem**: when we're in a difficult emotional state, we need help processing it without necessarily being with someone else in that moment.
+2. **The solution**: combine journaling (processing by writing) with reflective AI (Socratic questions, not advice).
+3. **The architecture**:
+   - Flask backend as a REST API orchestrating the logic (entry CRUD + reflection generation)
+   - React frontend with simple local state (no Redux/Context, because the app doesn't need it) and a custom design system in plain CSS
+   - SQLite for local persistence, no infrastructure dependencies
+   - Claude API for the "emotional intelligence" piece, with prompt engineering to force a structured JSON output
+4. **The technical challenge**: designing the system prompt so Claude asks reflective (Socratic) questions instead of giving advice, and robustly parsing a natural-language response into reliable JSON.
+5. **Product iteration**: starting from a working MVP, two improvements were driven by real usage: (a) a full visual modernization (typography, dark mode, micro-interactions, a CSS-variable design system) to make the app feel presentable, and (b) the ability to delete entries — an incomplete CRUD (no delete) is a real UX problem in any app handling personal data.
+6. **The takeaway**: it's a small project, but it demonstrates:
+   - REST API design and full CRUD principles
+   - End-to-end full-stack development (backend + frontend)
+   - Prompt engineering for a concrete use case, with structured output and error handling
+   - UX/design judgment: a coherent, accessible, responsive design system
+   - Good scope discipline: knowing when *not* to add a library or abstraction (no Tailwind, no agentic frameworks, no state manager) because the problem doesn't call for it
+
+## 📝 License
+
+MIT — use it and modify it however you like.
 
 ---
 
-**Hecho con ❤️ para procesar emociones de forma más consciente.**
+**Made with ❤️ to process emotions more consciously.**
