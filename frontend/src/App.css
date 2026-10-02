@@ -52,6 +52,43 @@ body {
 
 /* Header */
 
+/* Demo banner */
+
+.demo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  padding: 0.65rem 1.25rem;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.demo-banner strong {
+  color: var(--text);
+}
+
+.demo-banner-reset {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.demo-banner-reset:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .app-header {
   position: relative;
   background: radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.16), transparent 45%),

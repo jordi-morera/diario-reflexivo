@@ -6,6 +6,8 @@
 
 Construye una comprensión más profunda de tus patrones emocionales a través de conversaciones reflexivas impulsadas por Claude.
 
+**🎭 [Prueba la demo en vivo](https://jordi-morera.github.io/diario-reflexivo/)** — funciona entera en el navegador, con reflexiones realistas pregrabadas, sin backend ni clave de API. Ver [Modo demo](#-modo-demo) más abajo.
+
 ## 🎯 ¿Qué hace?
 
 1. **Escribes tu entrada** — expresas lo que sientes sin filtros
@@ -146,6 +148,17 @@ Frontend estará en `http://localhost:5173` (Vite usa el siguiente puerto libre 
 **Accede a la app:** abre el navegador en la URL que imprima Vite.
 
 > También hay un `setup.sh` que automatiza ambos pasos de instalación (`./setup.sh`).
+
+## 🎭 Modo demo
+
+La versión desplegada en GitHub Pages corre con `VITE_DEMO_MODE=true`: en vez de llamar al backend real de Flask/Lambda y a Claude, usa una pequeña API local (`frontend/src/demo/`) apoyada en `localStorage`, con unas cuantas entradas de ejemplo y sus reflexiones pregrabadas. Puedes escribir tus propias entradas y pedir una reflexión: recibirás una coherente con el estado de ánimo que elijas. Un aviso en la parte superior lo deja claro, con un botón para reiniciar la demo a su estado inicial.
+
+Esto existe para poder enseñar el proyecto gratis, al instante y sin gastar créditos de la API de Anthropic en cada visita. La integración real vive en `backend/app.py` y es justo con lo que habla `npm run dev` en local.
+
+```bash
+cd frontend
+VITE_DEMO_MODE=true npm run dev
+```
 
 ## 🚀 Despliegue en AWS
 

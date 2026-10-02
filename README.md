@@ -6,6 +6,8 @@
 
 Builds a deeper understanding of your emotional patterns through reflective conversations powered by Claude.
 
+**🎭 [Try the live demo](https://jordi-morera.github.io/diario-reflexivo/)** — runs entirely in the browser with realistic pre-recorded reflections, no backend or API key needed. See [Demo mode](#-demo-mode) below.
+
 ## 🎯 What it does
 
 1. **You write an entry** — express what you're feeling, unfiltered
@@ -147,6 +149,17 @@ Frontend will run at `http://localhost:5173` (Vite falls back to the next free p
 **Open the app:** visit the URL Vite prints in your terminal.
 
 > There's also a `setup.sh` script that automates both installs (`./setup.sh`).
+
+## 🎭 Demo mode
+
+The version deployed to GitHub Pages runs with `VITE_DEMO_MODE=true`: instead of calling the real Flask/Lambda backend and Claude, it uses a small local API (`frontend/src/demo/`) backed by `localStorage`, with a handful of pre-written entries and matching pre-recorded reflections. You can still write your own entries and ask for a reflection — you'll get a reflection that matches the mood you picked. A banner at the top makes this explicit, with a button to reset the demo back to its starting state.
+
+This exists so the project can be demoed for free, instantly, and without spending Anthropic API credits on every visitor. The real integration lives in `backend/app.py` and is exactly what `npm run dev` talks to locally.
+
+```bash
+cd frontend
+VITE_DEMO_MODE=true npm run dev
+```
 
 ## 🚀 Deploy to AWS
 

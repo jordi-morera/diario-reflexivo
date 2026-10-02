@@ -3,8 +3,8 @@ import './App.css'
 import DiaryList from './components/DiaryList'
 import DiaryEntry from './components/DiaryEntry'
 import Reflection from './components/Reflection'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5001/api'
+import DemoBanner from './components/DemoBanner'
+import { api, DEMO_MODE } from './api'
 
 export default function App() {
   const [view, setView] = useState('list')
@@ -20,8 +20,7 @@ export default function App() {
   const loadEntries = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/entries`)
-      if (res.ok) setEntries(await res.json())
+      setEntries(await api.listEntries())
     } catch (e) {
       console.error(e)
     }
@@ -30,17 +29,10 @@ export default function App() {
 
   const handleCreateEntry = async (content, mood) => {
     try {
-      const res = await fetch(`${API_BASE}/entries`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, mood })
-      })
-      if (res.ok) {
-        const entry = await res.json()
-        setSelectedEntry(entry)
-        setView('entry')
-        await loadEntries() // Esperar a que cargue
-      }
+      const entry = await api.createEntry(content, mood)
+      setSelectedEntry(entry)
+      setView('entry')
+      await loadEntries() // Esperar a que cargue
     } catch (e) {
       console.error(e)
     }
@@ -49,9 +41,9 @@ export default function App() {
   const handleSelectEntry = async (id) => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/entries/${id}`)
-      if (res.ok) {
-        setSelectedEntry(await res.json())
+      const entry = await api.getEntry(id)
+      if (entry) {
+        setSelectedEntry(entry)
         setView('entry')
       }
     } catch (e) {
@@ -63,8 +55,8 @@ export default function App() {
   const handleDeleteEntry = async (id) => {
     if (!window.confirm('¿Seguro que quieres eliminar esta entrada? Esta acción no se puede deshacer.')) return
     try {
-      const res = await fetch(`${API_BASE}/entries/${id}`, { method: 'DELETE' })
-      if (res.ok) {
+      const ok = await api.deleteEntry(id)
+      if (ok) {
         if (selectedEntry && selectedEntry.id === id) {
           setSelectedEntry(null)
           setReflection(null)
@@ -81,11 +73,9 @@ export default function App() {
     if (!selectedEntry) return
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/entries/${selectedEntry.id}/reflect`, {
-        method: 'POST'
-      })
-      if (res.ok) {
-        setReflection(await res.json())
+      const result = await api.reflect(selectedEntry.id)
+      if (result) {
+        setReflection(result)
         setView('reflection')
       }
     } catch (e) {
@@ -94,8 +84,17 @@ export default function App() {
     setLoading(false)
   }
 
+  const handleDemoReset = () => {
+    setSelectedEntry(null)
+    setReflection(null)
+    setView('list')
+    loadEntries()
+  }
+
   return (
     <div className="app">
+      {DEMO_MODE && <DemoBanner onReset={handleDemoReset} />}
+
       <header className="app-header">
         <h1>📔 Diario Reflexivo</h1>
         <p className="tagline">Tu espacio para procesar emociones</p>
